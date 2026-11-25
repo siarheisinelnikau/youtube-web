@@ -44,7 +44,15 @@ matching_release() {
 release=$(matching_release)
 if [[ -z "$release" ]]; then
   gh release create "$tag" --target "$commit" --title "$title" --notes-file "$work/release-notes.md" --draft
-  release=$(matching_release)
+  for attempt in 1 2 3 4 5 6; do
+    release=$(matching_release)
+    [[ -n "$release" ]] && break
+    sleep 2
+  done
+fi
+if [[ -z "$release" ]]; then
+  echo "::error::The release draft is not visible yet. Rerun the publish job."
+  exit 1
 fi
 id=$(jq -er --arg commit "$commit" 'select(.draft and .target_commitish == $commit) | .id' <<< "$release")
 
