@@ -1,0 +1,16 @@
+<resources>
+    <string name="updates">Updates</string>
+    <string name="installed_version">Installed version %1$s</string>
+    <string name="startup_updates">Check for updates on startup</string>
+    <string name="check_updates">Check for updates</string>
+    <string name="checking">Checking for updates…</string>
+    <string name="up_to_date">You have the latest version.</string>
+    <string name="update_available">Version %1$s is available.</string>
+    <string name="check_failed">Could not check for updates. Check your internet connection and retry.</string>
+    <string name="download_install">Download and install</string>
+    <string name="install_update">Install update</string>
+    <string name="downloading">Downloading… %1$d%%</string>
+    <string name="ready_to_install">Version %1$s is ready to install.</string>
+    <string name="download_failed">Could not download or verify the update. Try again.</string>
+    <string name="install_failed">Android could not install the update.</string>
+</resources>

@@ -1,0 +1,16 @@
+<resources>
+    <string name="updates">Обновления</string>
+    <string name="installed_version">Установлена версия %1$s</string>
+    <string name="startup_updates">Проверять обновления при запуске</string>
+    <string name="check_updates">Проверить обновления</string>
+    <string name="checking">Проверяем обновления…</string>
+    <string name="up_to_date">У вас актуальная версия.</string>
+    <string name="update_available">Доступна версия %1$s.</string>
+    <string name="check_failed">Не удалось проверить обновления. Проверьте подключение к интернету и повторите попытку.</string>
+    <string name="download_install">Скачать и установить</string>
+    <string name="install_update">Установить обновление</string>
+    <string name="downloading">Скачивание… %1$d%%</string>
+    <string name="ready_to_install">Версия %1$s готова к установке.</string>
+    <string name="download_failed">Не удалось скачать или проверить обновление. Повторите попытку.</string>
+    <string name="install_failed">Android не удалось установить обновление.</string>
+</resources>

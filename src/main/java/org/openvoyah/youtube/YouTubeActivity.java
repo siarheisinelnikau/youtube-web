@@ -81,6 +81,7 @@ public final class YouTubeActivity extends Activity {
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        org.openvoyah.youtube.update.Updates.get(this).startup();
         root = new FrameLayout(this);
         root.setBackgroundColor(Color.BLACK);
         root.setFitsSystemWindows(true);
