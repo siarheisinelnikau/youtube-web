@@ -1,0 +1,12 @@
+{
+  "tag": "v0.2.0",
+  "title": "YouTube Web 0.2.0",
+  "notes": "First GitHub release of YouTube Web, a standalone Open Voyah Controls companion that opens mobile YouTube on the head unit.\n\n- Uses the system WebView without requiring Google Play services. Supports full-screen video, media buttons, and playback controls in the Open Voyah Controls media widget.\n- Adds its own launcher tile and pauses playback when its window is hidden. Open Voyah Controls can set the companion's display, window width, and interface scale.\n- A progress line shows page loading. The optional startup animation can be skipped with a tap and disabled in the app's settings.\n- Check for new releases and download signed updates in the same settings screen.\n\nInstall **YouTubeWeb-v0.2.0.apk** on the head unit. Requires Android 9 or later, Android System WebView 80 or newer, and an internet connection. A debug preview signed with a different certificate requires a reinstall.",
+  "commit": "a2219310c3b9891d5acee1e1a4e5bd74f5352247",
+  "version_code": 2,
+  "assets": [
+    {
+      "name": "YouTubeWeb-v0.2.0.apk"
+    }
+  ]
+}
