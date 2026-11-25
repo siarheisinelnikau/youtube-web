@@ -1,6 +1,5 @@
 plugins {
     id 'com.android.application'
-    id 'org.jetbrains.kotlin.android'
 }
 
 // A separate package on purpose: the window service keys width and DPI profiles by package, and Controls lists every
@@ -20,9 +19,6 @@ android {
         release { minifyEnabled false }
     }
     lint { abortOnError true }
-}
-kotlin {
-    compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17 }
 }
 
 dependencies {
