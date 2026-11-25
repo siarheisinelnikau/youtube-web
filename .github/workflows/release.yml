@@ -7,66 +7,118 @@ on:
     paths: ['.github/release.json']
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: android-release
   cancel-in-progress: false
 
 jobs:
-  publish:
-    runs-on: ubuntu-latest
+  plan:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    outputs:
+      source: ${{ steps.mode.outputs.source }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e '.assets | type == "array" and length > 0' .github/release.json >/dev/null
+          source=$(jq -r 'all(.assets[]; has("blobs") | not)' .github/release.json)
+          if [[ "$source" == false ]]; then
+            jq -e 'all(.assets[]; (.blobs | type == "array"))' .github/release.json >/dev/null
+          fi
+          echo "source=$source" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: plan
+    if: needs.plan.outputs.source == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Prepare Android SDK
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"'
+      - name: Build and test unsigned APKs
+        run: bash .github/build-unsigned-apks.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unsigned-apks
+          path: ${{ runner.temp }}/unsigned-apks/*.apk
+          if-no-files-found: error
+
+  sign:
+    needs: build
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
+    environment: android-release
+    env:
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: unsigned-apks
+          path: ${{ runner.temp }}/unsigned-apks
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Prepare APK signing tools
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;35.0.0"'
+      - name: Sign and verify APKs
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: bash .github/sign-release-apks.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: signed-apks
+          path: ${{ runner.temp }}/signed-apks/*.apk
+          if-no-files-found: error
+
+  publish:
+    needs: [plan, sign]
+    if: >-
+      always() && needs.plan.result == 'success' &&
+      (needs.sign.result == 'success' ||
+      (needs.plan.outputs.source == 'false' && needs.sign.result == 'skipped'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-
-      - name: Verify staged APKs and publish
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: needs.sign.result == 'success'
+        with:
+          name: signed-apks
+          path: ${{ runner.temp }}/signed-apks
+      - name: Verify and publish the APKs
         shell: bash
         run: |
-          set -euo pipefail
-
-          manifest=.github/release.json
-          tag=$(jq -er '.tag | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))' "$manifest")
-          commit=$(jq -er '.commit | select(test("^[a-f0-9]{40}$"))' "$manifest")
-          title=$(jq -er '.title | select(length > 0)' "$manifest")
-          git merge-base --is-ancestor "$commit" HEAD
-
-          if gh release view "$tag" >/dev/null 2>&1; then
-            echo "::error::A release or draft already exists for $tag."
-            exit 1
+          if [[ "${{ needs.sign.result }}" == success ]]; then
+            export SIGNED_APK_DIR="$RUNNER_TEMP/signed-apks"
           fi
-          if git show-ref --verify --quiet "refs/tags/$tag"; then
-            test "$(git rev-list -n 1 "refs/tags/$tag")" = "$commit"
-          fi
-
-          work=$(mktemp -d)
-          trap 'rm -rf "$work"' EXIT
-          jq -er '.notes | select(length > 0)' "$manifest" > "$work/release-notes.md"
-          jq -e '.assets | type == "array" and length > 0' "$manifest" > /dev/null
-          assets=()
-          while IFS= read -r asset; do
-            name=$(jq -er '.name | select(test("^[A-Za-z0-9]+-v[0-9]+\\.[0-9]+\\.[0-9]+\\.apk$"))' <<< "$asset")
-            [[ "$name" == *-"$tag".apk ]]
-            expected=$(jq -er '.sha256 | select(test("^[a-f0-9]{64}$"))' <<< "$asset")
-            jq -e '.blobs | type == "array" and length > 0 and all(.[]; test("^[a-f0-9]{40}$"))' <<< "$asset" > /dev/null
-
-            apk="$work/$name"
-            test ! -e "$apk"
-            while IFS= read -r blob; do
-              gh api "repos/$GH_REPO/git/blobs/$blob" --jq .content | base64 --decode
-            done < <(jq -r '.blobs[]' <<< "$asset") > "$apk"
-
-            printf '%s  %s\n' "$expected" "$name" > "$apk.sha256"
-            (cd "$work" && sha256sum --check "$name.sha256")
-            unzip -tq "$apk"
-            assets+=("$apk" "$apk.sha256")
-          done < <(jq -c '.assets[]' "$manifest")
-
-          gh release create "$tag" "${assets[@]}" --target "$commit" --title "$title" --notes-file "$work/release-notes.md" --draft
-          gh release edit "$tag" --draft=false --latest
+          bash .github/publish-release.sh
