@@ -20,6 +20,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
@@ -56,6 +57,7 @@ public final class YouTubeActivity extends Activity {
     private FrameLayout root;
     private ScaledFrame page;
     private StatusView status;
+    private LoadProgress loadProgress;
     private PlayerHost player;
     private WebView web;
     private final PageLoad load = new PageLoad();
@@ -91,6 +93,9 @@ public final class YouTubeActivity extends Activity {
         status = new StatusView(this, this::retry, this::openAnyway);
         root.addView(page, new FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT));
         root.addView(status, new FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT));
+        loadProgress = new LoadProgress(this);
+        root.addView(loadProgress, new FrameLayout.LayoutParams(MATCH_PARENT,
+                Math.round(3 * getResources().getDisplayMetrics().density), Gravity.TOP));
         setContentView(root);
         target = WebPolicy.resumeUrl(savedInstanceState != null ? savedInstanceState.getString(STATE_URL) : null);
         String version = webViewVersion();
@@ -201,6 +206,7 @@ public final class YouTubeActivity extends Activity {
         main.removeCallbacks(blankCheck);
         main.postDelayed(slow, PageLoad.SLOW_MS);
         main.postDelayed(timeout, PageLoad.TIMEOUT_MS);
+        loadProgress.started();
         render();
     }
 
@@ -244,6 +250,8 @@ public final class YouTubeActivity extends Activity {
         if (current instanceof PageStatus.Failed && !current.equals(logged)) {
             Log.w(TAG, PageLoad.logLine((PageStatus.Failed) current, webViewVersion()));
         }
+        // A failed load is over for the user, whatever the WebView still loads under the message.
+        if (current instanceof PageStatus.Failed) loadProgress.finished();
         logged = current;
         status.show(current, webViewVersion());
     }
@@ -336,6 +344,7 @@ public final class YouTubeActivity extends Activity {
         fullscreen = null;
         fullscreenDone = null;
         if (web != null) web.setVisibility(View.VISIBLE);
+        loadProgress.setVisibility(View.VISIBLE);
         systemBars(true);
     }
 
@@ -384,6 +393,7 @@ public final class YouTubeActivity extends Activity {
 
         @Override public void onPageFinished(WebView view, String url) {
             view.evaluateJavascript(bridge(), null);
+            loadProgress.finished();
             visible();
         }
 
@@ -414,6 +424,7 @@ public final class YouTubeActivity extends Activity {
             page.removeView(view);
             view.destroy();
             if (web == view) web = null;
+            loadProgress.clear();
             load.rendererGone(detail.didCrash());
             render();
             return true;
@@ -430,11 +441,16 @@ public final class YouTubeActivity extends Activity {
             fullscreenDone = callback;
             page.addView(view, new FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT));
             if (web != null) web.setVisibility(View.INVISIBLE);
+            loadProgress.setVisibility(View.INVISIBLE);
             systemBars(false);
         }
 
         @Override public void onHideCustomView() {
             leaveFullscreen();
+        }
+
+        @Override public void onProgressChanged(WebView view, int newProgress) {
+            loadProgress.progress(newProgress);
         }
 
         @Override public boolean onConsoleMessage(ConsoleMessage message) {

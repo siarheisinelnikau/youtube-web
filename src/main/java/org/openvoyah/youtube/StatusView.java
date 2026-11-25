@@ -1,8 +1,12 @@
 package org.openvoyah.youtube;
 
+import android.animation.TimeInterpolator;
 import android.content.Context;
 import android.graphics.Color;
 import android.view.Gravity;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.animation.DecelerateInterpolator;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
@@ -11,13 +15,29 @@ import android.widget.TextView;
 /**
  * Covers the page while it loads or after it failed, so the window is never a silent black rectangle: a spinner while
  * loading, then the reason in words, the WebView version and the action that can help.
+ *
+ * <p>Changes are short fades through the render thread: the cover fades in over the page and out to reveal it, and a
+ * new message rises into place. The animations follow the system animator duration scale, and a cover on its way out
+ * lets touches through to the page at once.
  */
 final class StatusView extends LinearLayout {
+    private static final long APPEAR_MS = 200;
+    private static final long LEAVE_MS = 250;
+    private static final long CHANGE_MS = 220;
+    /** How far a new message rises as it fades in. */
+    private static final float RISE_DP = 8;
+    private static final TimeInterpolator DECELERATE = new DecelerateInterpolator();
+
     private final ProgressBar progress;
     private final TextView message;
     private final TextView detail;
     private final Button retryButton;
     private final Button anywayButton;
+    private final LinearLayout buttons;
+    /** The cover is fading out to show the page. */
+    private boolean leaving;
+    /** What the cover says now, to tell a new message from the same one shown again. */
+    private String shownKey = "";
 
     StatusView(Context context, Runnable retry, Runnable openAnyway) {
         super(context);
@@ -53,7 +73,7 @@ final class StatusView extends LinearLayout {
         LayoutParams detailParams = new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
         detailParams.topMargin = gap / 2;
         addView(detail, detailParams);
-        LinearLayout buttons = new LinearLayout(context);
+        buttons = new LinearLayout(context);
         buttons.setOrientation(HORIZONTAL);
         buttons.setGravity(Gravity.CENTER);
         buttons.addView(anywayButton);
@@ -68,9 +88,10 @@ final class StatusView extends LinearLayout {
         String version = webView != null ? getContext().getString(R.string.webview_version, webView)
                 : getContext().getString(R.string.webview_none);
         if (status == PageStatus.SHOWN) {
-            setVisibility(GONE);
-        } else if (status == PageStatus.LOADING) {
-            setVisibility(VISIBLE);
+            leave();
+            return;
+        }
+        if (status == PageStatus.LOADING) {
             progress.setVisibility(VISIBLE);
             message.setText(R.string.loading);
             detail.setText(version);
@@ -79,18 +100,72 @@ final class StatusView extends LinearLayout {
         } else if (status instanceof PageStatus.Failed) {
             PageStatus.Failed failure = (PageStatus.Failed) status;
             boolean old = failure.problem == Problem.OLD_WEBVIEW;
-            setVisibility(VISIBLE);
             progress.setVisibility(GONE);
             message.setText(text(failure.problem, webView));
             detail.setText(failure.detail.isEmpty() ? version : failure.detail + " · " + version);
             anywayButton.setVisibility(old ? VISIBLE : GONE);
             retryButton.setVisibility(old ? GONE : VISIBLE);
         }
+        appear();
+        String key = key();
+        if (!key.equals(shownKey)) {
+            shownKey = key;
+            rise(progress, message, detail, buttons);
+        }
     }
 
     /** The load is taking long; says so without giving up on it. */
     void slow() {
-        if (getVisibility() == VISIBLE && progress.getVisibility() == VISIBLE) message.setText(R.string.still_loading);
+        if (getVisibility() == VISIBLE && !leaving && progress.getVisibility() == VISIBLE) {
+            message.setText(R.string.still_loading);
+            shownKey = key();
+            rise(message);
+        }
+    }
+
+    /** A cover on its way out no longer holds the page back: touches go straight through to it. */
+    @Override public boolean dispatchTouchEvent(MotionEvent event) {
+        return !leaving && super.dispatchTouchEvent(event);
+    }
+
+    /** Fades the cover in over the page, or takes it back from a fade-out under way. */
+    private void appear() {
+        if (getVisibility() == VISIBLE && !leaving) return;
+        boolean wasHidden = getVisibility() != VISIBLE;
+        leaving = false;
+        animate().cancel();
+        if (wasHidden) setAlpha(0f);
+        setVisibility(VISIBLE);
+        animate().alpha(1f).setDuration(APPEAR_MS).setInterpolator(DECELERATE);
+    }
+
+    /** Fades the cover out to reveal the page. */
+    private void leave() {
+        if (getVisibility() != VISIBLE || leaving) return;
+        leaving = true;
+        animate().cancel();
+        animate().alpha(0f).setDuration(LEAVE_MS).setInterpolator(DECELERATE).withEndAction(() -> {
+            leaving = false;
+            shownKey = "";
+            setVisibility(GONE);
+            setAlpha(1f);
+        });
+    }
+
+    /** Fades {@code views} in while they rise into place. */
+    private void rise(View... views) {
+        float rise = RISE_DP * getResources().getDisplayMetrics().density;
+        for (View view : views) {
+            view.animate().cancel();
+            view.setAlpha(0f);
+            view.setTranslationY(rise);
+            view.animate().alpha(1f).translationY(0f).setDuration(CHANGE_MS).setInterpolator(DECELERATE);
+        }
+    }
+
+    private String key() {
+        return progress.getVisibility() + "|" + message.getText() + "|" + detail.getText() + "|"
+                + retryButton.getVisibility() + "|" + anywayButton.getVisibility();
     }
 
     private String text(Problem problem, String webView) {
