@@ -55,11 +55,19 @@ asset_list() {
 for asset in "${assets[@]}"; do
   name=${asset##*/}
   expected="sha256:$(sha256sum "$asset" | cut -d ' ' -f 1)"
-  remote=$(asset_list | jq -r --arg name "$name" '.[] | select(.name == $name) | .digest')
-  if [[ -z "$remote" ]]; then
-    gh release upload "$tag" "$asset"
-    remote=$(asset_list | jq -r --arg name "$name" '.[] | select(.name == $name) | .digest')
+  remote=$(asset_list | jq -c --arg name "$name" '.[] | select(.name == $name)')
+  if [[ -n "$remote" ]] && jq -e '.state == "starter"' <<< "$remote" >/dev/null; then
+    upload_id=$(jq -er '.id | select(type == "number")' <<< "$remote")
+    gh api --method DELETE "repos/$GH_REPO/releases/assets/$upload_id"
+    remote=
   fi
+  if [[ -z "$remote" ]]; then
+    if ! gh release upload "$tag" "$asset"; then
+      echo "Checking whether the upload reached GitHub: $name"
+    fi
+    remote=$(asset_list | jq -c --arg name "$name" '.[] | select(.name == $name)')
+  fi
+  remote=$(jq -r 'select(.state == "uploaded") | .digest' <<< "$remote")
   if [[ "$remote" != "$expected" ]]; then
     echo "::error::Remote asset has an unexpected checksum: $name"
     exit 1
