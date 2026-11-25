@@ -1,0 +1,9 @@
+<resources>
+    <!-- The window, the loading screen and the startup animation share this backdrop, so nothing flashes between them. -->
+    <color name="youtube_background">#FF000000</color>
+    <color name="youtube_text">#FFF1F1F1</color>
+    <color name="youtube_muted">#FFB0B0B0</color>
+    <color name="youtube_edge">#FF303030</color>
+    <!-- The red of the launcher icon. -->
+    <color name="youtube_accent">#FFFF2D2D</color>
+</resources>

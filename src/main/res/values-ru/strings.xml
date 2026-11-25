@@ -15,4 +15,8 @@
     <string name="retry">Повторить</string>
     <string name="open_anyway">Открыть всё равно</string>
     <string name="no_browser">Для этой ссылки не установлен браузер.</string>
+    <string name="intro_caption">Видео в дороге</string>
+    <string name="settings">Настройки YouTube</string>
+    <string name="startup_animation">Анимация при запуске</string>
+    <string name="startup_animation_hint">Играет каждый раз, когда YouTube открывается с главного экрана или из другого приложения. Касание пропускает её.</string>
 </resources>

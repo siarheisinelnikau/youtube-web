@@ -102,6 +102,7 @@ public final class YouTubeActivity extends Activity {
 
     @Override protected void onStart() {
         super.onStart();
+        YouTubeIntro.onActivityStart(this, Preferences.startupAnimation(this));
         if (web != null) web.onResume();
     }
 
@@ -109,7 +110,20 @@ public final class YouTubeActivity extends Activity {
         player.hidden();
         if (web != null) web.onPause();
         CookieManager.getInstance().flush();
+        YouTubeIntro.onActivityStop(this);
         super.onStop();
+    }
+
+    /** A launch that brings the running page back carries its own extras, such as the intro's debug moment. */
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+    }
+
+    /** A browser opened from a link hands the window back to YouTube, so coming back from it skips the intro. */
+    @Override public void startActivityForResult(Intent intent, int requestCode, Bundle options) {
+        super.startActivityForResult(intent, requestCode, options);
+        YouTubeIntro.onOwnScreenOpened();
     }
 
     /**

@@ -17,4 +17,8 @@
     <string name="retry">Try again</string>
     <string name="open_anyway">Open anyway</string>
     <string name="no_browser">No browser is installed for this link.</string>
+    <string name="intro_caption">Videos on the road</string>
+    <string name="settings">YouTube settings</string>
+    <string name="startup_animation">Startup animation</string>
+    <string name="startup_animation_hint">Plays each time YouTube opens from the home screen or another app. A tap skips it.</string>
 </resources>
